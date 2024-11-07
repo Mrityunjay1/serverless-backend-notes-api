@@ -1,0 +1,23 @@
+{
+  "name": "serverless-notes-api",
+  "version": "1.0.0",
+  "description": "Serverless Notes API with Authentication",
+  "main": "handler.js",
+  "scripts": {
+    "start": "serverless offline",
+    "deploy": "serverless deploy"
+  },
+  "dependencies": {
+    "@middy/core": "^3.6.2",
+    "@middy/http-cors": "^3.6.2",
+    "@middy/http-json-body-parser": "^3.6.2",
+    "aws-sdk": "^2.1450.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.1",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.34.0",
+    "serverless-offline": "^12.0.4"
+  }
+}
