@@ -33,11 +33,19 @@ const deleteNote = async (event) => {
 
     return {
       statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*", // Change this to your frontend URL in production
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
       body: JSON.stringify({ message: "Note deleted successfully" }),
     };
   } catch (error) {
     return {
       statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*", // Change this to your frontend URL in production
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
       body: JSON.stringify({ message: "Error deleting note" }),
     };
   }

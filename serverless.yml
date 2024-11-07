@@ -21,6 +21,10 @@ provider:
       Resource: 
         - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.NOTES_TABLE}"
         - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.USERS_TABLE}"
+    - Effect: Allow
+      Action:
+        - execute-api:Invoke
+      Resource: "*"
 
 functions:
   signup:
@@ -45,8 +49,18 @@ functions:
       - http:
           path: notes
           method: post
-          cors: true
-          authorizer: verifyToken
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Requested-With
+            allowCredentials: false
+       
+          
 
   getNotes:
     handler: src/notes/list.handler
@@ -55,7 +69,7 @@ functions:
           path: notes
           method: get
           cors: true
-          authorizer: verifyToken
+          
 
   getNote:
     handler: src/notes/get.handler
@@ -73,7 +87,7 @@ functions:
           path: notes/{id}
           method: put
           cors: true
-          authorizer: verifyToken
+         
 
   deleteNote:
     handler: src/notes/delete.handler
@@ -82,7 +96,7 @@ functions:
           path: notes/{id}
           method: delete
           cors: true
-          authorizer: verifyToken
+          
 
   verifyToken:
     handler: src/auth/verify.handler

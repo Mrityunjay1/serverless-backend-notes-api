@@ -20,6 +20,7 @@ const login = async (event) => {
 
     const user = result.Item;
 
+    // Check if user exists and password matches
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return {
         statusCode: 401,
@@ -27,7 +28,8 @@ const login = async (event) => {
       };
     }
 
-    const token = jwt.sign({ email: user.email }, process.env.JWT_SECRET, {
+    // Generate token with userId included in the payload
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1d",
     });
 
@@ -36,6 +38,7 @@ const login = async (event) => {
       body: JSON.stringify({ token }),
     };
   } catch (error) {
+    console.error("Error during login:", error); // Log the error for debugging
     return {
       statusCode: 500,
       body: JSON.stringify({ message: "Error during login" }),
