@@ -115,8 +115,7 @@ curl https://your-api-url/notes \
 │   ├── auth/
 │   │   ├── login.js
 │   │   ├── signup.js
-│   │   └── verify.js
-│   └── notes/
+│   └── handlers/
 │       ├── create.js
 │       ├── delete.js
 │       ├── get.js
