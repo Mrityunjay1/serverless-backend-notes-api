@@ -1,54 +1,49 @@
-const AWS = require("aws-sdk");
-const bcrypt = require("bcryptjs");
-const middy = require("@middy/core");
-const cors = require("@middy/http-cors");
-const jsonBodyParser = require("@middy/http-json-body-parser");
+const {
+  CognitoIdentityProviderClient,
+  SignUpCommand,
+} = require("@aws-sdk/client-cognito-identity-provider");
 
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
+const client = new CognitoIdentityProviderClient({});
 
-const signup = async (event) => {
-  const { email, password } = event.body;
-
+exports.handler = async (event) => {
   try {
-    // Check if user exists
-    const existingUser = await dynamoDB
-      .get({
-        TableName: process.env.USERS_TABLE,
-        Key: { email },
-      })
-      .promise();
+    const { email, password } = JSON.parse(event.body);
 
-    if (existingUser.Item) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "User already exists" }),
-      };
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Save user
-    await dynamoDB
-      .put({
-        TableName: process.env.USERS_TABLE,
-        Item: {
-          email,
-          password: hashedPassword,
+    const params = {
+      ClientId: process.env.USER_POOL_CLIENT_ID,
+      Username: email,
+      Password: password,
+      UserAttributes: [
+        {
+          Name: "email",
+          Value: email,
         },
-      })
-      .promise();
+      ],
+    };
+
+    await client.send(new SignUpCommand(params));
 
     return {
-      statusCode: 201,
-      body: JSON.stringify({ message: "User created successfully" }),
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        message:
+          "User registration successful. Please check your email for verification.",
+      }),
     };
   } catch (error) {
     return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Error creating user" }),
+      statusCode: error.statusCode || 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        error: error.message || "Could not create user.",
+      }),
     };
   }
 };
-
-module.exports.handler = middy(signup).use(jsonBodyParser()).use(cors());

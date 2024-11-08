@@ -1,49 +1,46 @@
-const AWS = require("aws-sdk");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const middy = require("@middy/core");
-const cors = require("@middy/http-cors");
-const jsonBodyParser = require("@middy/http-json-body-parser");
+const {
+  CognitoIdentityProviderClient,
+  InitiateAuthCommand,
+} = require("@aws-sdk/client-cognito-identity-provider");
 
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
+const client = new CognitoIdentityProviderClient({});
 
-const login = async (event) => {
-  const { email, password } = event.body;
-
+exports.handler = async (event) => {
   try {
-    const result = await dynamoDB
-      .get({
-        TableName: process.env.USERS_TABLE,
-        Key: { email },
-      })
-      .promise();
+    const { email, password } = JSON.parse(event.body);
 
-    const user = result.Item;
+    const params = {
+      AuthFlow: "USER_PASSWORD_AUTH",
+      ClientId: process.env.USER_POOL_CLIENT_ID,
+      AuthParameters: {
+        USERNAME: email,
+        PASSWORD: password,
+      },
+    };
 
-    // Check if user exists and password matches
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ message: "Invalid credentials" }),
-      };
-    }
-
-    // Generate token with userId included in the payload
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
-      expiresIn: "1d",
-    });
+    const response = await client.send(new InitiateAuthCommand(params));
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ token }),
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        token: response.AuthenticationResult.IdToken,
+        refreshToken: response.AuthenticationResult.RefreshToken,
+      }),
     };
   } catch (error) {
-    console.error("Error during login:", error); // Log the error for debugging
     return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Error during login" }),
+      statusCode: error.statusCode || 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        error: error.message || "Could not authenticate user.",
+      }),
     };
   }
 };
-
-module.exports.handler = middy(login).use(jsonBodyParser()).use(cors());

@@ -1,30 +1,19 @@
-service: serverless-notes-api
+service: serverless-notes-app
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-iam-roles-per-function
+  - serverless-offline
 
 provider:
   name: aws
   runtime: nodejs18.x
-  stage: dev
   region: us-east-1
   environment:
-    NOTES_TABLE: notes-${self:provider.stage}
-    USERS_TABLE: users-${self:provider.stage}
-    JWT_SECRET: your-secret-key-change-this-in-production
-  iamRoleStatements:
-    - Effect: Allow
-      Action:
-        - dynamodb:Query
-        - dynamodb:Scan
-        - dynamodb:GetItem
-        - dynamodb:PutItem
-        - dynamodb:UpdateItem
-        - dynamodb:DeleteItem
-      Resource: 
-        - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.NOTES_TABLE}"
-        - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.USERS_TABLE}"
-    - Effect: Allow
-      Action:
-        - execute-api:Invoke
-      Resource: "*"
+    NOTES_TABLE: ${self:service}-${sls:stage}
+    USER_POOL_ID: !Ref CognitoUserPool
+    USER_POOL_CLIENT_ID: !Ref CognitoUserPoolClient
 
 functions:
   signup:
@@ -44,65 +33,127 @@ functions:
           cors: true
 
   createNote:
-    handler: src/notes/create.handler
+    handler: src/handlers/createNote.handler
     events:
       - http:
           path: notes
           method: post
-          cors:
-            origin: '*'
-            headers:
-              - Content-Type
-              - X-Amz-Date
-              - Authorization
-              - X-Api-Key
-              - X-Amz-Security-Token
-              - X-Requested-With
-            allowCredentials: false
-       
-          
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            type: COGNITO_USER_POOLS
+            arn: !GetAtt CognitoUserPool.Arn
+    iamRoleStatementsName: ${self:service}-createNote-${sls:stage}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: !GetAtt NotesTable.Arn
 
   getNotes:
-    handler: src/notes/list.handler
+    handler: src/handlers/getNotes.handler
     events:
       - http:
           path: notes
           method: get
           cors: true
-          
+          authorizer:
+            name: cognitoAuthorizer
+            type: COGNITO_USER_POOLS
+            arn: !GetAtt CognitoUserPool.Arn
+    iamRoleStatementsName: ${self:service}-getNotes-${sls:stage}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: 
+          - !GetAtt NotesTable.Arn
+          - !Join ['', [!GetAtt NotesTable.Arn, '/index/UserIdIndex']]
 
   getNote:
-    handler: src/notes/get.handler
+    handler: src/handlers/getNote.handler
     events:
       - http:
           path: notes/{id}
           method: get
           cors: true
-          authorizer: verifyToken
+          authorizer:
+            name: cognitoAuthorizer
+            type: COGNITO_USER_POOLS
+            arn: !GetAtt CognitoUserPool.Arn
+    iamRoleStatementsName: ${self:service}-getNote-${sls:stage}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource: !GetAtt NotesTable.Arn
 
   updateNote:
-    handler: src/notes/update.handler
+    handler: src/handlers/updateNote.handler
     events:
       - http:
           path: notes/{id}
           method: put
           cors: true
-         
+          authorizer:
+            name: cognitoAuthorizer
+            type: COGNITO_USER_POOLS
+            arn: !GetAtt CognitoUserPool.Arn
+    iamRoleStatementsName: ${self:service}-updateNote-${sls:stage}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+          - dynamodb:GetItem
+        Resource: !GetAtt NotesTable.Arn
 
   deleteNote:
-    handler: src/notes/delete.handler
+    handler: src/handlers/deleteNote.handler
     events:
       - http:
           path: notes/{id}
           method: delete
           cors: true
-          
-
-  verifyToken:
-    handler: src/auth/verify.handler
+          authorizer:
+            name: cognitoAuthorizer
+            type: COGNITO_USER_POOLS
+            arn: !GetAtt CognitoUserPool.Arn
+    iamRoleStatementsName: ${self:service}-deleteNote-${sls:stage}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+          - dynamodb:GetItem
+        Resource: !GetAtt NotesTable.Arn
 
 resources:
   Resources:
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-user-pool-${sls:stage}
+        UsernameAttributes:
+          - email
+        AutoVerifiedAttributes:
+          - email
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireNumbers: true
+            RequireSymbols: true
+            RequireUppercase: true
+
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:service}-user-pool-client-${sls:stage}
+        UserPoolId: !Ref CognitoUserPool
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+        GenerateSecret: false
+
     NotesTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -116,25 +167,10 @@ resources:
           - AttributeName: id
             KeyType: HASH
         GlobalSecondaryIndexes:
-          - IndexName: userIndex
+          - IndexName: UserIdIndex
             KeySchema:
               - AttributeName: userId
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
         BillingMode: PAY_PER_REQUEST
-
-    UsersTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:provider.environment.USERS_TABLE}
-        AttributeDefinitions:
-          - AttributeName: email
-            AttributeType: S
-        KeySchema:
-          - AttributeName: email
-            KeyType: HASH
-        BillingMode: PAY_PER_REQUEST
-
-plugins:
-  - serverless-offline
