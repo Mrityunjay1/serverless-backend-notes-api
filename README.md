@@ -4,19 +4,20 @@ A secure, serverless REST API for managing notes built with Node.js, AWS Lambda,
 
 ## Features
 
-- 🔐 User authentication (signup/login)
+- 🔐 User authentication with Amazon Cognito
 - 📝 CRUD operations for notes
-- 🔒 JWT-based authorization
+- 🔒 Secure authorization
 - 🚀 Serverless architecture
 - 📦 DynamoDB storage
 - ⚡ Fast and scalable
 
 ## API Endpoints
 
-### Authentication
+### Authentication (via Amazon Cognito)
 
-- `POST /auth/signup` - Create a new user account
-- `POST /auth/login` - Login and receive JWT token
+- User authentication is handled through Amazon Cognito User Pools
+- Client-side authentication flow using Cognito SDK
+- Secure token-based access
 
 ### Notes
 
@@ -31,9 +32,8 @@ A secure, serverless REST API for managing notes built with Node.js, AWS Lambda,
 - Node.js 18.x
 - AWS Lambda
 - Amazon DynamoDB
+- Amazon Cognito
 - Serverless Framework
-- JWT for authentication
-- Middy middleware
 - CORS enabled
 
 ## Prerequisites
@@ -50,10 +50,14 @@ A secure, serverless REST API for managing notes built with Node.js, AWS Lambda,
 npm install
 ```
 
-3. Update the `JWT_SECRET` in `serverless.yml`:
+3. Configure Cognito User Pool settings in `serverless.yml`:
 ```yaml
-environment:
-  JWT_SECRET: your-secret-key-here
+resources:
+  Resources:
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        # Your Cognito configuration here
 ```
 
 ## Deployment
@@ -72,24 +76,19 @@ serverless offline
 
 ## API Usage
 
-### Sign Up
-```bash
-curl -X POST https://your-api-url/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "password123"}'
-```
+### Authentication Flow
 
-### Login
+1. Users sign up and sign in through Cognito User Pool
+2. Use the Cognito ID token in API requests:
 ```bash
-curl -X POST https://your-api-url/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "password123"}'
+curl https://your-api-url/notes \
+  -H "Authorization: Bearer COGNITO_ID_TOKEN"
 ```
 
 ### Create Note
 ```bash
 curl -X POST https://your-api-url/notes \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Authorization: Bearer COGNITO_ID_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title": "My Note", "content": "Note content"}'
 ```
@@ -97,24 +96,21 @@ curl -X POST https://your-api-url/notes \
 ### Get Notes
 ```bash
 curl https://your-api-url/notes \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+  -H "Authorization: Bearer COGNITO_ID_TOKEN"
 ```
 
 ## Security
 
-- Passwords are hashed using bcrypt
-- JWT tokens for authentication
+- Authentication handled by Amazon Cognito User Pools
+- Secure token-based authorization
 - DynamoDB table-level permissions
-- API Gateway authorization
+- API Gateway authorization with Cognito authorizer
 
 ## Project Structure
 
 ```
 .
 ├── src/
-│   ├── auth/
-│   │   ├── login.js
-│   │   ├── signup.js
 │   └── handlers/
 │       ├── create.js
 │       ├── delete.js
@@ -127,19 +123,11 @@ curl https://your-api-url/notes \
 
 ## DynamoDB Schema
 
-### Users Table
-```
-{
-  email: String (Hash Key),
-  password: String (Hashed)
-}
-```
-
 ### Notes Table
 ```
 {
   id: String (Hash Key),
-  userId: String (GSI),
+  userId: String (GSI, Cognito sub),
   title: String,
   content: String,
   createdAt: Number,
